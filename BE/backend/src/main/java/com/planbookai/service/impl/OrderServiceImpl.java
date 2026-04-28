@@ -13,6 +13,8 @@ import com.planbookai.repository.UserRepository;
 import com.planbookai.security.CurrentUserService;
 import com.planbookai.service.OrderService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -57,10 +59,21 @@ public class OrderServiceImpl implements OrderService {
         if (currentUserService.hasRole("ADMIN") || currentUserService.hasRole("MANAGER")) {
             return orderRepository.findAll().stream().map(this::toResponse).toList();
         }
-        return orderRepository.findByUser_UserId(Objects.requireNonNull(currentUserService.requireUserId()))
+        return orderRepository.findByUser_UserId(
+                        Objects.requireNonNull(currentUserService.requireUserId()))
                 .stream()
                 .map(this::toResponse)
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<OrderResponse> listByRolePaged(Pageable pageable) {
+        if (currentUserService.hasRole("ADMIN") || currentUserService.hasRole("MANAGER")) {
+            return orderRepository.findAll(pageable).map(this::toResponse);
+        }
+        Long userId = Objects.requireNonNull(currentUserService.requireUserId());
+        return orderRepository.findByUser_UserId(userId, pageable).map(this::toResponse);
     }
 
     @Override
@@ -72,10 +85,8 @@ public class OrderServiceImpl implements OrderService {
     }
 
     private @NonNull UserOrder getOrder(@NonNull Long orderId) {
-        return Objects.requireNonNull(
-                orderRepository.findById(orderId)
-                        .orElseThrow(() -> new IllegalArgumentException("Order not found: " + orderId))
-        );
+        return orderRepository.findById(orderId)
+                .orElseThrow(() -> new IllegalArgumentException("Order not found: " + orderId));
     }
 
     private OrderResponse toResponse(UserOrder order) {

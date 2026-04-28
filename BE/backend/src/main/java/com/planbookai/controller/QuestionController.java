@@ -8,13 +8,15 @@ import com.planbookai.entity.enums.QuestionStatus;
 import com.planbookai.service.QuestionService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.lang.NonNull;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/questions")
@@ -24,18 +26,19 @@ public class QuestionController {
     private final QuestionService questionService;
 
     /**
-     * Lấy danh sách câu hỏi — có thể filter theo topicId, subjectId, status, difficulty
-     * TEACHER, STAFF, MANAGER, ADMIN đều xem được
+     * Lấy danh sách câu hỏi có phân trang + filter.
+     * GET /api/v1/questions?topicId=1&status=APPROVED&page=0&size=20&sort=createdAt,desc
      */
     @GetMapping
     @PreAuthorize("hasAnyRole('TEACHER','STAFF','MANAGER','ADMIN')")
-    public List<QuestionResponse> list(
+    public Page<QuestionResponse> list(
             @RequestParam(required = false) Long topicId,
             @RequestParam(required = false) Long subjectId,
             @RequestParam(required = false) QuestionStatus status,
-            @RequestParam(required = false) QuestionDifficulty difficulty
+            @RequestParam(required = false) QuestionDifficulty difficulty,
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
-        return questionService.filter(topicId, subjectId, status, difficulty);
+        return questionService.filterPaged(topicId, subjectId, status, difficulty, pageable);
     }
 
     @GetMapping("/{id}")
@@ -47,16 +50,14 @@ public class QuestionController {
     }
 
     /**
-     * Tạo câu hỏi vào ngân hàng:
-     * - TEACHER: tạo cho bản thân, status = PENDING (cần duyệt)
-     * - STAFF: tạo mẫu, status = PENDING (cần Manager duyệt)
-     * - ADMIN: tạo và tự duyệt luôn
+     * Tạo câu hỏi:
+     * - TEACHER/STAFF → status = PENDING (cần duyệt)
+     * - ADMIN → status = APPROVED tự động
      */
     @PostMapping
     @PreAuthorize("hasAnyRole('TEACHER','STAFF','ADMIN')")
     public ResponseEntity<QuestionResponse> create(@Valid @RequestBody QuestionCreateRequest body) {
-        QuestionResponse created = questionService.create(body);
-        return ResponseEntity.status(HttpStatus.CREATED).body(created);
+        return ResponseEntity.status(HttpStatus.CREATED).body(questionService.create(body));
     }
 
     @PutMapping("/{id}")
@@ -74,20 +75,14 @@ public class QuestionController {
         return ResponseEntity.noContent().build();
     }
 
-    /**
-     * MANAGER/ADMIN duyệt câu hỏi từ PENDING → APPROVED
-     * PATCH /api/v1/questions/{id}/approve
-     */
+    /** MANAGER/ADMIN duyệt câu hỏi PENDING → APPROVED + ghi audit */
     @PatchMapping("/{id}/approve")
     @PreAuthorize("hasAnyRole('MANAGER','ADMIN')")
     public ResponseEntity<QuestionResponse> approve(@PathVariable @NonNull Long id) {
         return ResponseEntity.ok(questionService.approve(id));
     }
 
-    /**
-     * MANAGER/ADMIN từ chối câu hỏi
-     * PATCH /api/v1/questions/{id}/reject
-     */
+    /** MANAGER/ADMIN từ chối câu hỏi + ghi audit */
     @PatchMapping("/{id}/reject")
     @PreAuthorize("hasAnyRole('MANAGER','ADMIN')")
     public ResponseEntity<QuestionResponse> reject(@PathVariable @NonNull Long id) {

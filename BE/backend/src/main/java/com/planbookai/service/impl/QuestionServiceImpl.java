@@ -5,19 +5,25 @@ import com.planbookai.dto.question.QuestionChoiceResponse;
 import com.planbookai.dto.question.QuestionCreateRequest;
 import com.planbookai.dto.question.QuestionResponse;
 import com.planbookai.dto.question.QuestionUpdateRequest;
+import com.planbookai.entity.Approval;
 import com.planbookai.entity.Question;
 import com.planbookai.entity.QuestionChoice;
 import com.planbookai.entity.Topic;
 import com.planbookai.entity.User;
+import com.planbookai.entity.enums.ApprovalContentType;
+import com.planbookai.entity.enums.ApprovalStatus;
 import com.planbookai.entity.enums.QuestionDifficulty;
 import com.planbookai.entity.enums.QuestionStatus;
 import com.planbookai.entity.enums.QuestionType;
+import com.planbookai.repository.ApprovalRepository;
 import com.planbookai.repository.QuestionRepository;
 import com.planbookai.repository.TopicRepository;
 import com.planbookai.repository.UserRepository;
 import com.planbookai.security.CurrentUserService;
 import com.planbookai.service.QuestionService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +42,7 @@ public class QuestionServiceImpl implements QuestionService {
     private final TopicRepository topicRepository;
     private final UserRepository userRepository;
     private final CurrentUserService currentUserService;
+    private final ApprovalRepository approvalRepository;   // FIX: audit trail
 
     @Override
     @Transactional(readOnly = true)
@@ -83,8 +90,7 @@ public class QuestionServiceImpl implements QuestionService {
             }
         }
 
-        Question saved = questionRepository.save(entity);
-        return toResponse(saved);
+        return toResponse(questionRepository.save(entity));
     }
 
     @Override
@@ -129,32 +135,29 @@ public class QuestionServiceImpl implements QuestionService {
     @Transactional(readOnly = true)
     public List<QuestionResponse> filter(Long topicId, Long subjectId,
                                           QuestionStatus status, QuestionDifficulty difficulty) {
-        // Lấy danh sách gốc theo topicId hoặc all
         Stream<Question> stream;
         if (topicId != null) {
             stream = questionRepository.findByTopic_TopicId(topicId).stream();
         } else {
             stream = questionRepository.findAll().stream();
         }
-
-        // Filter subject
         if (subjectId != null) {
             stream = stream.filter(q -> q.getTopic() != null
                     && q.getTopic().getSubject() != null
                     && subjectId.equals(q.getTopic().getSubject().getSubjectId()));
         }
-
-        // Filter status
-        if (status != null) {
-            stream = stream.filter(q -> status.equals(q.getStatus()));
-        }
-
-        // Filter difficulty
-        if (difficulty != null) {
-            stream = stream.filter(q -> difficulty.equals(q.getDifficulty()));
-        }
-
+        if (status != null) stream = stream.filter(q -> status.equals(q.getStatus()));
+        if (difficulty != null) stream = stream.filter(q -> difficulty.equals(q.getDifficulty()));
         return stream.map(this::toResponse).toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<QuestionResponse> filterPaged(Long topicId, Long subjectId,
+                                               QuestionStatus status, QuestionDifficulty difficulty,
+                                               Pageable pageable) {
+        return questionRepository.filterPaged(topicId, subjectId, status, difficulty, pageable)
+                .map(this::toResponse);
     }
 
     @Override
@@ -162,18 +165,42 @@ public class QuestionServiceImpl implements QuestionService {
     public QuestionResponse approve(@NonNull Long questionId) {
         Question question = getQuestion(questionId);
         question.setStatus(QuestionStatus.APPROVED);
-        return toResponse(questionRepository.save(question));
+        questionRepository.save(question);
+        // FIX: ghi audit trail vào bảng approval
+        writeApprovalRecord(questionId, ApprovalStatus.APPROVED, null);
+        return toResponse(question);
     }
 
     @Override
     @Transactional
     public QuestionResponse reject(@NonNull Long questionId) {
         Question question = getQuestion(questionId);
-        question.setStatus(QuestionStatus.PENDING); // reset về pending
-        return toResponse(questionRepository.save(question));
+        question.setStatus(QuestionStatus.REJECTED);
+        questionRepository.save(question);
+        // FIX: ghi audit trail vào bảng approval
+        writeApprovalRecord(questionId, ApprovalStatus.REJECTED, null);
+        return toResponse(question);
     }
 
     // ==================== PRIVATE ====================
+
+    /**
+     * Ghi record vào bảng approval để lưu audit trail.
+     */
+    private void writeApprovalRecord(Long contentId, ApprovalStatus status, String comment) {
+        Long approverId = currentUserService.requireUserId();
+        User approver = userRepository.findById(approverId)
+                .orElseThrow(() -> new IllegalArgumentException("Approver not found: " + approverId));
+
+        Approval approval = new Approval();
+        approval.setApprover(approver);
+        approval.setContentId(contentId);
+        approval.setContentType(ApprovalContentType.QUESTION);
+        approval.setStatus(status);
+        approval.setComment(comment);
+        approval.setCreatedAt(LocalDateTime.now());
+        approvalRepository.save(approval);
+    }
 
     private @NonNull Question getQuestion(@NonNull Long questionId) {
         return questionRepository.findById(questionId)

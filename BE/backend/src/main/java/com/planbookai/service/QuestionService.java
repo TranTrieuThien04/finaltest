@@ -5,6 +5,9 @@ import com.planbookai.dto.question.QuestionResponse;
 import com.planbookai.dto.question.QuestionUpdateRequest;
 import com.planbookai.entity.enums.QuestionDifficulty;
 import com.planbookai.entity.enums.QuestionStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.lang.NonNull;
 
 import java.util.List;
 import java.util.Optional;
@@ -21,16 +24,21 @@ public interface QuestionService {
 
     void delete(Long questionId);
 
-    /**
-     * Filter câu hỏi theo topicId, subjectId, status, difficulty
-     * Bất kỳ tham số nào null thì bỏ qua điều kiện đó
-     */
+    /** Filter không phân trang — giữ để tương thích ngược */
     List<QuestionResponse> filter(Long topicId, Long subjectId,
                                    QuestionStatus status, QuestionDifficulty difficulty);
 
-    /** Duyệt câu hỏi (PENDING → APPROVED) */
-    QuestionResponse approve(Long questionId);
+    /**
+     * Filter có phân trang — dùng cho list API production.
+     * Trả về Page với metadata (totalElements, totalPages, ...).
+     */
+    Page<QuestionResponse> filterPaged(Long topicId, Long subjectId,
+                                        QuestionStatus status, QuestionDifficulty difficulty,
+                                        Pageable pageable);
 
-    /** Từ chối câu hỏi */
-    QuestionResponse reject(Long questionId);
+    /** Duyệt câu hỏi (PENDING → APPROVED) + ghi audit */
+    QuestionResponse approve(@NonNull Long questionId);
+
+    /** Từ chối câu hỏi + ghi audit */
+    QuestionResponse reject(@NonNull Long questionId);
 }

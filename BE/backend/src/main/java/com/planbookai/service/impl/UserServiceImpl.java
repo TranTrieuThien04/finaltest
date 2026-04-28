@@ -9,6 +9,8 @@ import com.planbookai.repository.RoleRepository;
 import com.planbookai.repository.UserRepository;
 import com.planbookai.service.UserService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.lang.NonNull;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -18,6 +20,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -31,6 +34,12 @@ public class UserServiceImpl implements UserService {
     @Transactional(readOnly = true)
     public List<UserResponse> findAll() {
         return userRepository.findAll().stream().map(this::toResponse).toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<UserResponse> findAllPaged(Pageable pageable) {
+        return userRepository.findAll(pageable).map(this::toResponse);
     }
 
     @Override
@@ -87,7 +96,7 @@ public class UserServiceImpl implements UserService {
         return roleNames.stream()
                 .map(name -> roleRepository.findByName(name.toUpperCase())
                         .orElseThrow(() -> new IllegalArgumentException("Role not found: " + name)))
-                .collect(java.util.stream.Collectors.toSet());
+                .collect(Collectors.toSet());
     }
 
     private UserResponse toResponse(User user) {
