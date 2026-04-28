@@ -9,6 +9,7 @@ import com.planbookai.entity.Question;
 import com.planbookai.entity.QuestionChoice;
 import com.planbookai.entity.Topic;
 import com.planbookai.entity.User;
+import com.planbookai.entity.enums.QuestionDifficulty;
 import com.planbookai.entity.enums.QuestionStatus;
 import com.planbookai.entity.enums.QuestionType;
 import com.planbookai.repository.QuestionRepository;
@@ -25,6 +26,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 @Service
 @RequiredArgsConstructor
@@ -65,15 +67,20 @@ public class QuestionServiceImpl implements QuestionService {
         entity.setContent(request.getContent());
         entity.setType(request.getType());
         entity.setDifficulty(request.getDifficulty());
-        entity.setStatus(QuestionStatus.PENDING);
+        // ADMIN tạo thì tự duyệt luôn, còn lại PENDING
+        entity.setStatus(currentUserService.hasRole("ADMIN")
+                ? QuestionStatus.APPROVED
+                : QuestionStatus.PENDING);
         entity.setCreatedAt(LocalDateTime.now());
 
-        for (QuestionChoiceCreateRequest c : request.getChoices()) {
-            QuestionChoice choice = new QuestionChoice();
-            choice.setQuestion(entity);
-            choice.setContent(c.getContent());
-            choice.setIsCorrect(c.getCorrect());
-            entity.getChoices().add(choice);
+        if (request.getChoices() != null) {
+            for (QuestionChoiceCreateRequest c : request.getChoices()) {
+                QuestionChoice choice = new QuestionChoice();
+                choice.setQuestion(entity);
+                choice.setContent(c.getContent());
+                choice.setIsCorrect(c.getCorrect());
+                entity.getChoices().add(choice);
+            }
         }
 
         Question saved = questionRepository.save(entity);
@@ -97,12 +104,14 @@ public class QuestionServiceImpl implements QuestionService {
         question.setDifficulty(request.getDifficulty());
 
         question.getChoices().clear();
-        for (QuestionChoiceCreateRequest c : request.getChoices()) {
-            QuestionChoice choice = new QuestionChoice();
-            choice.setQuestion(question);
-            choice.setContent(c.getContent());
-            choice.setIsCorrect(c.getCorrect());
-            question.getChoices().add(choice);
+        if (request.getChoices() != null) {
+            for (QuestionChoiceCreateRequest c : request.getChoices()) {
+                QuestionChoice choice = new QuestionChoice();
+                choice.setQuestion(question);
+                choice.setContent(c.getContent());
+                choice.setIsCorrect(c.getCorrect());
+                question.getChoices().add(choice);
+            }
         }
 
         return toResponse(questionRepository.save(question));
@@ -116,50 +125,84 @@ public class QuestionServiceImpl implements QuestionService {
         questionRepository.delete(question);
     }
 
-    private @NonNull Question getQuestion(@NonNull Long questionId) {
-        return Objects.requireNonNull(
-                questionRepository.findById(questionId)
-                        .orElseThrow(() -> new IllegalArgumentException("Question not found: " + questionId))
-        );
+    @Override
+    @Transactional(readOnly = true)
+    public List<QuestionResponse> filter(Long topicId, Long subjectId,
+                                          QuestionStatus status, QuestionDifficulty difficulty) {
+        // Lấy danh sách gốc theo topicId hoặc all
+        Stream<Question> stream;
+        if (topicId != null) {
+            stream = questionRepository.findByTopic_TopicId(topicId).stream();
+        } else {
+            stream = questionRepository.findAll().stream();
+        }
+
+        // Filter subject
+        if (subjectId != null) {
+            stream = stream.filter(q -> q.getTopic() != null
+                    && q.getTopic().getSubject() != null
+                    && subjectId.equals(q.getTopic().getSubject().getSubjectId()));
+        }
+
+        // Filter status
+        if (status != null) {
+            stream = stream.filter(q -> status.equals(q.getStatus()));
+        }
+
+        // Filter difficulty
+        if (difficulty != null) {
+            stream = stream.filter(q -> difficulty.equals(q.getDifficulty()));
+        }
+
+        return stream.map(this::toResponse).toList();
     }
 
     @Override
-    @Transactional(readOnly = true)
-    public List<QuestionResponse> filter(Long topicId, Long subjectId) {
-        if (topicId != null) {
-            return questionRepository.findByTopic_TopicId(topicId).stream().map(this::toResponse).toList();
-        }
-        if (subjectId != null) {
-            return questionRepository.findAll().stream()
-                    .filter(q -> q.getTopic() != null && q.getTopic().getSubject() != null
-                            && subjectId.equals(q.getTopic().getSubject().getSubjectId()))
-                    .map(this::toResponse)
-                    .toList();
-        }
-        return findAll();
+    @Transactional
+    public QuestionResponse approve(@NonNull Long questionId) {
+        Question question = getQuestion(questionId);
+        question.setStatus(QuestionStatus.APPROVED);
+        return toResponse(questionRepository.save(question));
+    }
+
+    @Override
+    @Transactional
+    public QuestionResponse reject(@NonNull Long questionId) {
+        Question question = getQuestion(questionId);
+        question.setStatus(QuestionStatus.PENDING); // reset về pending
+        return toResponse(questionRepository.save(question));
+    }
+
+    // ==================== PRIVATE ====================
+
+    private @NonNull Question getQuestion(@NonNull Long questionId) {
+        return questionRepository.findById(questionId)
+                .orElseThrow(() -> new IllegalArgumentException("Question not found: " + questionId));
     }
 
     private void ensureOwnerOrAdmin(Question question) {
+        if (currentUserService.hasRole("ADMIN")) return;
         Long currentUserId = currentUserService.requireUserId();
-        if (currentUserService.hasRole("ADMIN")) {
-            return;
-        }
         if (!currentUserId.equals(question.getCreatedBy().getUserId())) {
-            throw new IllegalArgumentException("You can only modify your own question");
+            throw new IllegalArgumentException("Bạn chỉ có thể chỉnh sửa câu hỏi của mình");
         }
     }
 
     private void validateChoicesForType(QuestionType type, List<QuestionChoiceCreateRequest> choices) {
         if (type == QuestionType.MCQ) {
             if (choices == null || choices.isEmpty()) {
-                throw new IllegalArgumentException("MCQ questions require at least one choice");
+                throw new IllegalArgumentException("Câu hỏi trắc nghiệm cần ít nhất 1 lựa chọn");
             }
-            long correct = choices.stream().filter(c -> Boolean.TRUE.equals(c.getCorrect())).count();
-            if (correct != 1) {
-                throw new IllegalArgumentException("MCQ must have exactly one correct choice");
+            long correctCount = choices.stream()
+                    .filter(c -> Boolean.TRUE.equals(c.getCorrect()))
+                    .count();
+            if (correctCount != 1) {
+                throw new IllegalArgumentException("Câu hỏi trắc nghiệm phải có đúng 1 đáp án đúng");
             }
-        } else if (choices != null && !choices.isEmpty()) {
-            throw new IllegalArgumentException("Choices are only allowed for MCQ type");
+        } else {
+            if (choices != null && !choices.isEmpty()) {
+                throw new IllegalArgumentException("Chỉ câu hỏi MCQ mới có thể có lựa chọn");
+            }
         }
     }
 

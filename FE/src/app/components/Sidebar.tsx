@@ -1,114 +1,76 @@
-import { Link, useLocation } from "react-router";
-import {
-  LayoutDashboard,
-  BookOpen,
-  Wand2,
-  FileText,
-  ScanLine,
-  BarChart3,
-  Users,
-  Settings,
-  Package,
-  Database,
-  LogOut,
-  GraduationCap,
+import React from "react";
+import { Link, useLocation } from "react-router-dom";
+import { 
+  LayoutDashboard, BookOpen, Wand2, FileText, ScanLine,
+  CheckSquare, Users, Package, ClipboardList, FileSearch,
+  Terminal, LogOut 
 } from "lucide-react";
-import { cn } from "../components/ui/utils";
-import type { UserRole } from "../lib/auth";
+import { cn } from "./ui/utils";
+import { UserRole } from "../lib/auth";
 
-interface SidebarProps {
-  role: UserRole;
-  onLogout: () => void;
+interface Props { 
+  role: UserRole; 
+  onLogout: () => void; 
 }
 
-const navigationByRole: Record<
-  UserRole,
-  Array<{ icon: any; label: string; href: string }>
-> = {
+const menu: Record<UserRole, any[]> = {
   teacher: [
-    { icon: LayoutDashboard, label: "Dashboard", href: "/teacher" },
-    { icon: BookOpen, label: "Question Bank", href: "/teacher/question-bank" },
-    {
-      icon: Wand2,
-      label: "Exercise Generator",
-      href: "/teacher/exercise-generator",
-    },
-    { icon: FileText, label: "Exam Generator", href: "/teacher/exam-generator" },
-    { icon: ScanLine, label: "OCR Grading", href: "/teacher/ocr-grading" },
-    { icon: BarChart3, label: "Analytics", href: "/teacher/analytics" },
+    { icon: LayoutDashboard, label: "Dashboard",       href: "/teacher" },
+    { icon: BookOpen,        label: "Ngân hàng câu hỏi", href: "/teacher/question-bank" },
+    { icon: Wand2,           label: "Tạo bài tập",       href: "/teacher/exercise-generator" },
+    { icon: FileText,        label: "Tạo đề thi",        href: "/teacher/exam-generator" },
+    { icon: ScanLine,        label: "Chấm điểm OCR",     href: "/teacher/ocr-grading" },
   ],
   admin: [
-    { icon: LayoutDashboard, label: "Dashboard", href: "/admin" },
-    { icon: Users, label: "User Management", href: "/admin" },
-    { icon: Settings, label: "System Settings", href: "/admin" },
-    { icon: Database, label: "Curriculum Templates", href: "/admin" },
-    { icon: BarChart3, label: "Revenue Reports", href: "/admin" },
+    { icon: Users,           label: "Quản lý Users",     href: "/admin/users" },
+    { icon: LayoutDashboard, label: "Teacher Tools",     href: "/teacher" },
   ],
   manager: [
-    { icon: LayoutDashboard, label: "Dashboard", href: "/manager" },
-    { icon: Package, label: "Subscriptions", href: "/manager" },
-    { icon: FileText, label: "Orders", href: "/manager" },
-    { icon: BookOpen, label: "Content Approval", href: "/manager" },
+    { icon: ClipboardList,   label: "Đơn hàng",          href: "/manager/orders" },
+    { icon: Package,         label: "Gói dịch vụ",       href: "/manager/packages" },
+    { icon: CheckSquare,     label: "Duyệt nội dung",    href: "/manager/approval" },
   ],
   staff: [
-    { icon: LayoutDashboard, label: "Dashboard", href: "/staff" },
-    { icon: BookOpen, label: "Lesson Plans", href: "/staff" },
-    { icon: Database, label: "Question Bank", href: "/staff" },
-    { icon: Wand2, label: "AI Prompts", href: "/staff" },
+    { icon: FileSearch,      label: "Duyệt giáo án",     href: "/staff/lesson-plans" },
+    { icon: Terminal,        label: "Prompt Templates",  href: "/staff/prompts" },
   ],
 };
 
-export function Sidebar({ role, onLogout }: SidebarProps) {
-  const location = useLocation();
-  const navigation = navigationByRole[role];
-
+export default function Sidebar({ role, onLogout }: Props) {
+  const { pathname } = useLocation();
+  
   return (
-    <div className="flex h-full w-64 flex-col border-r bg-white">
-      {/* Logo */}
-      <div className="flex h-16 items-center gap-2 border-b px-6">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-600 to-cyan-500">
-          <GraduationCap className="h-6 w-6 text-white" />
-        </div>
-        <div>
-          <h1 className="font-semibold text-gray-900">PlanbookAI</h1>
-          <p className="text-xs text-gray-500 capitalize">{role} Portal</p>
-        </div>
+    <div className="w-64 border-r bg-white flex flex-col h-screen">
+      <div className="h-16 flex items-center px-6 font-black text-indigo-600 text-xl tracking-tighter">
+        PLANBOOKAI
       </div>
-
-      {/* Navigation */}
-      <nav className="flex-1 space-y-1 p-4">
-        {navigation.map((item) => {
-          const Icon = item.icon;
-          const isActive = location.pathname === item.href;
+      
+      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+        {menu[role]?.map((item) => {
+          const isBaseRoute = ["/teacher", "/admin", "/manager", "/staff"].includes(item.href);
+          const isActive = isBaseRoute ? pathname === item.href : pathname.startsWith(item.href);
 
           return (
-            <Link
-              key={item.href}
-              to={item.href}
+            <Link 
+              key={item.href} 
+              to={item.href} 
               className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                isActive
-                  ? "bg-indigo-50 text-indigo-700"
-                  : "text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all", 
+                isActive ? "bg-indigo-50 text-indigo-700" : "text-gray-400 hover:bg-gray-50"
               )}
             >
-              <Icon className="h-5 w-5" />
-              {item.label}
+              <item.icon size={20} /> {item.label}
             </Link>
           );
         })}
       </nav>
 
-      {/* Logout */}
-      <div className="border-t p-4">
-        <button
-          onClick={onLogout}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 hover:text-gray-900"
-        >
-          <LogOut className="h-5 w-5" />
-          Logout
-        </button>
-      </div>
+      <button 
+        onClick={onLogout} 
+        className="m-4 flex items-center gap-3 px-4 py-3 text-red-500 font-bold hover:bg-red-50 rounded-xl transition-all"
+      >
+        <LogOut size={20}/> Đăng xuất
+      </button>
     </div>
   );
 }

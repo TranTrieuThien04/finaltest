@@ -1,57 +1,38 @@
-// Mock authentication system
+import apiClient from "../../api/apiClient";
+
+const TOKEN_KEY = "planbookai_token";
+const USER_KEY  = "planbookai_user";
+
 export type UserRole = "teacher" | "admin" | "manager" | "staff";
+export interface User { id: number; email: string; role: UserRole; name: string; }
 
-export interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: UserRole;
-  avatar?: string;
-}
-
-// Mock user data
-const mockUsers: Record<string, User> = {
-  teacher: {
-    id: "1",
-    name: "Dr. Sarah Johnson",
-    email: "sarah.johnson@school.edu",
-    role: "teacher",
-  },
-  admin: {
-    id: "2",
-    name: "Michael Chen",
-    email: "michael.chen@planbookai.com",
-    role: "admin",
-  },
-  manager: {
-    id: "3",
-    name: "Emily Rodriguez",
-    email: "emily.rodriguez@planbookai.com",
-    role: "manager",
-  },
-  staff: {
-    id: "4",
-    name: "James Williams",
-    email: "james.williams@planbookai.com",
-    role: "staff",
-  },
-};
-
-export const login = (email: string, password: string): User | null => {
-  // Mock login - in real app, this would call an API
-  const role = email.split("@")[0].split(".")[0].toLowerCase() as UserRole;
-  return mockUsers[role] || mockUsers.teacher;
+export const getAuthToken = () => localStorage.getItem(TOKEN_KEY);
+export const getCurrentUser = (): User | null => {
+  const str = localStorage.getItem(USER_KEY);
+  return str ? JSON.parse(str) : null;
 };
 
 export const logout = () => {
-  localStorage.removeItem("user");
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USER_KEY);
+  if (window.location.pathname !== "/login") window.location.href = "/login";
 };
 
-export const getCurrentUser = (): User | null => {
-  const userStr = localStorage.getItem("user");
-  return userStr ? JSON.parse(userStr) : null;
-};
+export async function loginWithCredentials(email: string, password: string): Promise<User> {
+  const res = await apiClient.post("/api/auth/login", { email, password });
+  const { token } = res.data;
+  localStorage.setItem(TOKEN_KEY, token);
 
-export const saveUser = (user: User) => {
-  localStorage.setItem("user", JSON.stringify(user));
-};
+  const meRes = await apiClient.get("/api/auth/me");
+  const raw = meRes.data;
+
+  const user: User = {
+    id: raw.id,
+    email: raw.email,
+    name: raw.fullName ?? raw.name ?? "User",
+    role: (Array.isArray(raw.roles) ? raw.roles[0] : (raw.role || "teacher")).toLowerCase().replace("role_", "") as UserRole
+  };
+
+  localStorage.setItem(USER_KEY, JSON.stringify(user));
+  return user;
+}

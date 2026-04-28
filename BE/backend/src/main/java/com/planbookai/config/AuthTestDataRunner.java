@@ -7,61 +7,57 @@ import com.planbookai.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
-import org.springframework.lang.NonNull;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.Optional;
+import java.util.List;
+import java.util.Map;
 
-/**
- * Seeds a fixed test account for local auth testing (idempotent).
- */
 @Component
 @RequiredArgsConstructor
 public class AuthTestDataRunner implements ApplicationRunner {
-
-    private static final String TEST_EMAIL = "teacher@test.com";
-    private static final String TEST_PASSWORD = "123456";
-    private static final String TEACHER_ROLE_NAME = "TEACHER";
 
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
 
+    private static final String DEMO_PASSWORD = "Password123!";
+
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
-        Optional<Role> existingRole = roleRepository.findByName(TEACHER_ROLE_NAME);
-        Role teacherRole;
-        if (existingRole.isPresent()) {
-            teacherRole = existingRole.get();
-        } else {
-            Role toPersist = createRole(TEACHER_ROLE_NAME);
-            teacherRole = roleRepository.save(toPersist);
+        // 1. Seed roles
+        for (String roleName : List.of("ADMIN", "MANAGER", "STAFF", "TEACHER")) {
+            roleRepository.findByName(roleName).orElseGet(() -> {
+                Role r = new Role();
+                r.setName(roleName);
+                return roleRepository.save(r);
+            });
         }
 
-        Optional<User> existingUser = userRepository.findByEmail(TEST_EMAIL);
-        User user = existingUser.orElseGet(User::new);
-        boolean isNew = user.getUserId() == null;
+        // 2. Seed demo users (idempotent - chỉ tạo nếu chưa có)
+        List<Map<String, String>> demoUsers = List.of(
+            Map.of("email", "teacher@planbookai.com", "name", "Demo Teacher", "role", "TEACHER"),
+            Map.of("email", "admin@planbookai.com",   "name", "Demo Admin",   "role", "ADMIN"),
+            Map.of("email", "manager@planbookai.com", "name", "Demo Manager", "role", "MANAGER"),
+            Map.of("email", "staff@planbookai.com",   "name", "Demo Staff",   "role", "STAFF")
+        );
 
-        if (isNew) {
-            user.setEmail(TEST_EMAIL);
-            user.setCreatedAt(LocalDateTime.now());
+        for (Map<String, String> demo : demoUsers) {
+            if (userRepository.findByEmail(demo.get("email")).isEmpty()) {
+                Role role = roleRepository.findByName(demo.get("role")).orElseThrow();
+                User user = new User();
+                user.setEmail(demo.get("email"));
+                user.setFullName(demo.get("name"));
+                user.setPasswordHash(passwordEncoder.encode(DEMO_PASSWORD));
+                user.setStatus("active");
+                user.setCreatedAt(LocalDateTime.now());
+                user.setUpdatedAt(LocalDateTime.now());
+                user.getRoles().add(role);
+                userRepository.save(user);
+            }
         }
-        user.setPasswordHash(passwordEncoder.encode(TEST_PASSWORD));
-        user.setFullName("Test Teacher");
-        user.setStatus("active");
-        user.setUpdatedAt(LocalDateTime.now());
-        user.getRoles().add(teacherRole);
-
-        userRepository.save(user);
-    }
-
-    private static @NonNull Role createRole(String name) {
-        Role role = new Role();
-        role.setName(name);
-        return role;
     }
 }

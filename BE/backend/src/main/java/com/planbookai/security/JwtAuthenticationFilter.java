@@ -25,6 +25,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(@NonNull HttpServletRequest request) {
         String path = request.getServletPath();
+        // Chỉ skip /api/auth/login — KHÔNG skip /api/auth/me (cần JWT)
         return "/api/auth/login".equals(path);
     }
 

@@ -1,11 +1,13 @@
 package com.planbookai.repository;
 
-import com.planbookai.entity.OCRResult;
+import com.planbookai.entity.OcrResult;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
 
-public interface OCRResultRepository extends JpaRepository<OCRResult, Long> {
+public interface OcrResultRepository extends JpaRepository<OcrResult, Long> {
 
-    List<OCRResult> findByExam_ExamId(Long examId);
+    List<OcrResult> findByExamId(Long examId);
+
+    List<OcrResult> findByExamIdOrderByGradedAtDesc(Long examId);
 }

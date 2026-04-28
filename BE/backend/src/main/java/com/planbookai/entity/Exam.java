@@ -5,7 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-
+import com.planbookai.entity.OcrResult;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -46,6 +46,4 @@ public class Exam {
     @OneToMany(mappedBy = "exam", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ExamQuestion> examQuestions = new ArrayList<>();
 
-    @OneToMany(mappedBy = "exam", fetch = FetchType.LAZY)
-    private List<OCRResult> ocrResults = new ArrayList<>();
 }

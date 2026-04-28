@@ -2,41 +2,30 @@ package com.planbookai.entity;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Builder;
+import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
-
 import java.time.LocalDateTime;
 
-/**
- * Stored output of OCR-based grading for one exam attempt / paper.
- */
 @Entity
-@Table(name = "ocr_result")
-@Getter
-@Setter
+@Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class OCRResult {
-
+public class OcrResult {
+    
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "ocr_result_id")
-    private Long ocrResultId;
+    private Long id;
+    
+    private String fileName;
+    
+    @Column(columnDefinition = "TEXT")
+    private String rawText;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "exam_id", nullable = false)
+    @JoinColumn(name = "exam_id")
     private Exam exam;
-
-    @Column(name = "student_name", length = 255)
-    private String studentName;
-
-    private Double score;
-
-    /** Raw OCR / grading payload as JSON text. */
-    @Column(name = "result_json", columnDefinition = "json")
-    private String resultJson;
-
-    @Column(name = "graded_at")
-    private LocalDateTime gradedAt;
+    
+    private LocalDateTime createdAt = LocalDateTime.now();
 }

@@ -1,12 +1,15 @@
-import { RouterProvider } from "react-router";
-import { router } from "./routes";
-import { Toaster } from "./components/ui/sonner";
+import { RouterProvider } from "react-router-dom";
+import { router } from "./routes"; // Kiểm tra lại đường dẫn này cho đúng file routes.tsx
+import { Toaster } from "sonner";
 
 function App() {
   return (
     <>
+      {/* Cấp quyền định tuyến cho toàn bộ ứng dụng */}
       <RouterProvider router={router} />
-      <Toaster />
+      
+      {/* Hiển thị thông báo toast */}
+      <Toaster position="top-right" richColors />
     </>
   );
 }

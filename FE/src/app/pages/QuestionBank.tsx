@@ -1,365 +1,183 @@
-import { useState } from "react";
-import { Plus, Search, Filter, Edit, Trash2, Copy } from "lucide-react";
-import { Button } from "../components/ui/button";
-import { Input } from "../components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../components/ui/select";
-import { Badge } from "../components/ui/badge";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "../components/ui/dialog";
-import { Label } from "../components/ui/label";
-import { Textarea } from "../components/ui/textarea";
+import React, { useEffect, useState } from "react";
+import apiClient from "../../api/apiClient";
 import { toast } from "sonner";
-
-interface Question {
-  id: string;
-  question: string;
-  topic: string;
-  difficulty: "Easy" | "Medium" | "Hard";
-  type: "Multiple Choice" | "Short Answer" | "Essay";
-  answer: string;
-  options?: string[];
-  createdAt: string;
-}
-
-const mockQuestions: Question[] = [
-  {
-    id: "1",
-    question: "What is the atomic number of Carbon?",
-    topic: "Periodic Table",
-    difficulty: "Easy",
-    type: "Multiple Choice",
-    answer: "6",
-    options: ["4", "6", "8", "12"],
-    createdAt: "2026-03-15",
-  },
-  {
-    id: "2",
-    question: "Explain the difference between ionic and covalent bonding.",
-    topic: "Chemical Bonding",
-    difficulty: "Medium",
-    type: "Essay",
-    answer: "Ionic bonding involves electron transfer...",
-    createdAt: "2026-03-14",
-  },
-  {
-    id: "3",
-    question: "Balance the equation: H₂ + O₂ → H₂O",
-    topic: "Chemical Reactions",
-    difficulty: "Medium",
-    type: "Short Answer",
-    answer: "2H₂ + O₂ → 2H₂O",
-    createdAt: "2026-03-13",
-  },
-  {
-    id: "4",
-    question: "What is Avogadro's number?",
-    topic: "Stoichiometry",
-    difficulty: "Easy",
-    type: "Multiple Choice",
-    answer: "6.022 × 10²³",
-    options: ["3.14 × 10²³", "6.022 × 10²³", "1.60 × 10⁻¹⁹", "9.81 × 10⁸"],
-    createdAt: "2026-03-12",
-  },
-  {
-    id: "5",
-    question: "Describe the process of electrolysis in detail.",
-    topic: "Electrochemistry",
-    difficulty: "Hard",
-    type: "Essay",
-    answer: "Electrolysis is a process...",
-    createdAt: "2026-03-10",
-  },
-];
+import { Loader2, Plus, Trash2, Filter, X } from "lucide-react";
 
 export default function QuestionBank() {
-  const [questions, setQuestions] = useState(mockQuestions);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterTopic, setFilterTopic] = useState("all");
-  const [filterDifficulty, setFilterDifficulty] = useState("all");
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-
-  const filteredQuestions = questions.filter((q) => {
-    const matchesSearch = q.question.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesTopic = filterTopic === "all" || q.topic === filterTopic;
-    const matchesDifficulty = filterDifficulty === "all" || q.difficulty === filterDifficulty;
-    return matchesSearch && matchesTopic && matchesDifficulty;
+  const [questions, setQuestions] = useState<any[]>([]);
+  const [topics, setTopics] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filterTopic, setFilterTopic] = useState("");
+  const [showModal, setShowModal] = useState(false);
+  
+  const [formData, setFormData] = useState({
+    content: "",
+    topicId: "",
+    difficulty: "EASY",
+    options: [
+      { content: "", correct: true },
+      { content: "", correct: false },
+      { content: "", correct: false },
+      { content: "", correct: false }
+    ]
   });
 
-  const handleDeleteQuestion = (id: string) => {
-    setQuestions(questions.filter((q) => q.id !== id));
-    toast.success("Question deleted successfully");
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const [qRes, tRes] = await Promise.all([
+        apiClient.get("/api/v1/questions"),
+        apiClient.get("/api/v1/topics")
+      ]);
+      setQuestions(qRes.data);
+      setTopics(tRes.data);
+    } catch {
+      toast.error("Lỗi tải dữ liệu ngân hàng");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleDuplicateQuestion = (question: Question) => {
-    const newQuestion = {
-      ...question,
-      id: Date.now().toString(),
-      createdAt: new Date().toISOString().split("T")[0],
-    };
-    setQuestions([newQuestion, ...questions]);
-    toast.success("Question duplicated successfully");
+  useEffect(() => { fetchData(); }, []);
+
+  const handleDelete = async (id: number) => {
+    if (!confirm("Xóa câu hỏi này khỏi ngân hàng?")) return;
+    try {
+      await apiClient.delete(`/api/v1/questions/${id}`);
+      toast.success("Đã xóa câu hỏi");
+      fetchData();
+    } catch {
+      toast.error("Lỗi khi xóa");
+    }
   };
 
-  const topics = Array.from(new Set(mockQuestions.map((q) => q.topic)));
-
-  const difficultyColors = {
-    Easy: "bg-green-50 text-green-700 border-green-200",
-    Medium: "bg-yellow-50 text-yellow-700 border-yellow-200",
-    Hard: "bg-red-50 text-red-700 border-red-200",
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.topicId) return toast.error("Vui lòng chọn chủ đề");
+    
+    try {
+      await apiClient.post("/api/v1/questions", {
+        content: formData.content,
+        type: "MCQ",
+        difficulty: formData.difficulty,
+        topicId: Number(formData.topicId),
+        choices: formData.options
+      });
+      toast.success("Thêm câu hỏi thành công");
+      setShowModal(false);
+      setFormData({
+        content: "", topicId: "", difficulty: "EASY",
+        options: [{ content: "", correct: true }, { content: "", correct: false }, { content: "", correct: false }, { content: "", correct: false }]
+      });
+      fetchData();
+    } catch {
+      toast.error("Thêm câu hỏi thất bại");
+    }
   };
+
+  const updateOption = (index: number, val: string) => {
+    const newOptions = [...formData.options];
+    newOptions[index].content = val;
+    setFormData({ ...formData, options: newOptions });
+  };
+
+  const filteredQuestions = filterTopic 
+    ? questions.filter(q => q.topicId?.toString() === filterTopic) 
+    : questions;
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Question Bank</h1>
-          <p className="mt-1 text-gray-600">
-            Manage and organize your chemistry questions
-          </p>
-        </div>
-        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-indigo-600 hover:bg-indigo-700">
-              <Plus className="mr-2 h-4 w-4" />
-              Add Question
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Add New Question</DialogTitle>
-              <DialogDescription>
-                Create a new question for your question bank
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Topic</Label>
-                  <Select>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select topic" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {topics.map((topic) => (
-                        <SelectItem key={topic} value={topic}>
-                          {topic}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Difficulty</Label>
-                  <Select>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select difficulty" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Easy">Easy</SelectItem>
-                      <SelectItem value="Medium">Medium</SelectItem>
-                      <SelectItem value="Hard">Hard</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label>Question Type</Label>
-                <Select>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Multiple Choice">Multiple Choice</SelectItem>
-                    <SelectItem value="Short Answer">Short Answer</SelectItem>
-                    <SelectItem value="Essay">Essay</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Question</Label>
-                <Textarea placeholder="Enter your question here..." rows={4} />
-              </div>
-              <div className="space-y-2">
-                <Label>Answer</Label>
-                <Textarea placeholder="Enter the correct answer..." rows={3} />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button
-                className="bg-indigo-600 hover:bg-indigo-700"
-                onClick={() => {
-                  setIsAddDialogOpen(false);
-                  toast.success("Question added successfully");
-                }}
-              >
-                Add Question
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+    <div className="p-6 space-y-6">
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold">Ngân Hàng Câu Hỏi</h1>
+        <button 
+          onClick={() => setShowModal(true)} 
+          className="bg-indigo-600 text-white px-4 py-2 rounded-xl flex items-center gap-2 font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700"
+        >
+          <Plus size={18} /> Thêm Câu Hỏi
+        </button>
       </div>
 
-      {/* Filters */}
-      <Card>
-        <CardContent className="p-6">
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-              <Input
-                placeholder="Search questions..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-            <Select value={filterTopic} onValueChange={setFilterTopic}>
-              <SelectTrigger>
-                <div className="flex items-center gap-2">
-                  <Filter className="h-4 w-4" />
-                  <SelectValue placeholder="All Topics" />
-                </div>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Topics</SelectItem>
-                {topics.map((topic) => (
-                  <SelectItem key={topic} value={topic}>
-                    {topic}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={filterDifficulty} onValueChange={setFilterDifficulty}>
-              <SelectTrigger>
-                <SelectValue placeholder="All Difficulties" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Difficulties</SelectItem>
-                <SelectItem value="Easy">Easy</SelectItem>
-                <SelectItem value="Medium">Medium</SelectItem>
-                <SelectItem value="Hard">Hard</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-sm text-gray-600">Total Questions</p>
-            <p className="text-2xl font-bold text-gray-900">{questions.length}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-sm text-gray-600">Easy</p>
-            <p className="text-2xl font-bold text-green-600">
-              {questions.filter((q) => q.difficulty === "Easy").length}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-sm text-gray-600">Medium</p>
-            <p className="text-2xl font-bold text-yellow-600">
-              {questions.filter((q) => q.difficulty === "Medium").length}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-sm text-gray-600">Hard</p>
-            <p className="text-2xl font-bold text-red-600">
-              {questions.filter((q) => q.difficulty === "Hard").length}
-            </p>
-          </CardContent>
-        </Card>
+      <div className="flex items-center gap-2 bg-white p-3 rounded-xl border w-fit">
+        <Filter size={18} className="text-gray-400" />
+        <select 
+          className="border-none outline-none bg-transparent text-sm font-bold text-gray-700"
+          value={filterTopic}
+          onChange={e => setFilterTopic(e.target.value)}
+        >
+          <option value="">Tất cả chủ đề</option>
+          {topics.map(t => <option key={t.topicId || t.id} value={t.topicId || t.id}>{t.name}</option>)}
+        </select>
       </div>
 
-      {/* Questions List */}
-      <div className="space-y-4">
-        {filteredQuestions.map((question) => (
-          <Card key={question.id} className="hover:shadow-md transition-shadow">
-            <CardContent className="p-6">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Badge variant="outline" className="text-indigo-600 border-indigo-200">
-                      {question.topic}
-                    </Badge>
-                    <Badge variant="outline" className={difficultyColors[question.difficulty]}>
-                      {question.difficulty}
-                    </Badge>
-                    <Badge variant="outline" className="text-gray-600">
-                      {question.type}
-                    </Badge>
+      {loading ? (
+        <div className="py-20 text-center"><Loader2 className="animate-spin mx-auto text-indigo-600" /></div>
+      ) : (
+        <div className="grid gap-4">
+          {filteredQuestions.length === 0 ? (
+            <div className="text-center py-10 text-gray-400 italic bg-white rounded-2xl border">Không có câu hỏi nào</div>
+          ) : filteredQuestions.map((q: any) => (
+            <div key={q.questionId || q.id} className="bg-white p-5 rounded-2xl border hover:shadow-md transition-all group">
+              <div className="flex justify-between items-start gap-4">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2 py-1 text-[10px] font-black rounded-md ${q.difficulty === 'HARD' ? 'bg-red-100 text-red-700' : q.difficulty === 'MEDIUM' ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}>
+                      {q.difficulty || 'EASY'}
+                    </span>
+                    <span className={`px-2 py-1 text-[10px] font-black rounded-md ${q.status === 'APPROVED' ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-600'}`}>
+                      {q.status || 'PENDING'}
+                    </span>
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                    {question.question}
-                  </h3>
-                  {question.options && (
-                    <div className="grid grid-cols-2 gap-2 mt-3">
-                      {question.options.map((option, idx) => (
-                        <div
-                          key={idx}
-                          className={`rounded-lg border p-2 text-sm ${
-                            option === question.answer
-                              ? "border-green-500 bg-green-50 text-green-900"
-                              : "border-gray-200 bg-gray-50 text-gray-700"
-                          }`}
-                        >
-                          {String.fromCharCode(65 + idx)}. {option}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <p className="text-xs text-gray-500 mt-3">
-                    Created: {question.createdAt}
-                  </p>
+                  <p className="font-bold text-gray-900">{q.content}</p>
                 </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleDuplicateQuestion(question)}
-                  >
-                    <Copy className="h-4 w-4" />
-                  </Button>
-                  <Button variant="ghost" size="icon">
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleDeleteQuestion(question.id)}
-                  >
-                    <Trash2 className="h-4 w-4 text-red-600" />
-                  </Button>
-                </div>
+                <button onClick={() => handleDelete(q.questionId || q.id)} className="p-2 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all">
+                  <Trash2 size={18} />
+                </button>
               </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {showModal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white w-full max-w-xl rounded-3xl p-8 shadow-2xl overflow-y-auto max-h-[90vh]">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold">Thêm Câu Hỏi Trắc Nghiệm</h2>
+              <button onClick={() => setShowModal(false)}><X /></button>
+            </div>
+            <form onSubmit={handleCreate} className="space-y-4">
+              <textarea required placeholder="Nội dung câu hỏi..." className="w-full border-2 rounded-xl p-3 outline-none focus:border-indigo-500 h-24" value={formData.content} onChange={e => setFormData({...formData, content: e.target.value})} />
+              
+              <div className="grid grid-cols-2 gap-4">
+                <select required className="w-full border-2 rounded-xl p-3 outline-none" value={formData.topicId} onChange={e => setFormData({...formData, topicId: e.target.value})}>
+                  <option value="">-- Chọn chủ đề --</option>
+                  {topics.map(t => <option key={t.topicId || t.id} value={t.topicId || t.id}>{t.name}</option>)}
+                </select>
+                <select className="w-full border-2 rounded-xl p-3 outline-none" value={formData.difficulty} onChange={e => setFormData({...formData, difficulty: e.target.value})}>
+                  <option value="EASY">Dễ</option>
+                  <option value="MEDIUM">Trung bình</option>
+                  <option value="HARD">Khó</option>
+                </select>
+              </div>
+
+              <div className="space-y-2 pt-2">
+                <label className="text-sm font-bold text-gray-500">Các đáp án (Đánh dấu tích vào đáp án đúng)</label>
+                {formData.options.map((opt, idx) => (
+                  <div key={idx} className="flex items-center gap-3">
+                    <input type="radio" name="correctAnswer" checked={opt.correct} onChange={() => {
+                      const newOpts = formData.options.map((o, i) => ({ ...o, correct: i === idx }));
+                      setFormData({ ...formData, options: newOpts });
+                    }} className="w-4 h-4 text-indigo-600" />
+                    <input required placeholder={`Đáp án ${idx + 1}`} className="flex-1 border rounded-lg p-2 outline-none" value={opt.content} onChange={e => updateOption(idx, e.target.value)} />
+                  </div>
+                ))}
+              </div>
+
+              <button type="submit" className="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl hover:bg-indigo-700 mt-4">LƯU CÂU HỎI</button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

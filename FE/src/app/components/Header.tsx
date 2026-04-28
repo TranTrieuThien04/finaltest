@@ -1,54 +1,52 @@
-import { Bell, Search } from "lucide-react";
-import { Input } from "./ui/input";
-import { Button } from "./ui/button";
-import { Avatar, AvatarFallback } from "./ui/avatar";
-import type { User } from "../lib/auth";
+import React from "react";
+import { logout } from "../lib/auth";
 
 interface HeaderProps {
-  user: User;
+  user: {
+    name?: string;
+    email: string;
+    role: string;
+  };
 }
 
 export function Header({ user }: HeaderProps) {
-  const initials = user.name
+  if (!user) return null;
+
+  const initials = (user.name ?? user.email ?? "U")
     .split(" ")
     .map((n) => n[0])
     .join("")
-    .toUpperCase();
+    .toUpperCase()
+    .slice(0, 2);
 
   return (
-    <header className="flex h-16 items-center justify-between border-b bg-white px-6">
-      {/* Search */}
-      <div className="flex-1 max-w-md">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-          <Input
-            type="search"
-            placeholder="Search..."
-            className="pl-9 bg-gray-50 border-gray-200"
-          />
-        </div>
+    <header className="h-16 border-b bg-white flex items-center justify-between px-6 shadow-sm">
+      <div className="font-semibold text-lg text-gray-800 tracking-tight">
+        PlanbookAI Workspace
       </div>
 
-      {/* Right section */}
       <div className="flex items-center gap-4">
-        {/* Notifications */}
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="h-5 w-5" />
-          <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500"></span>
-        </Button>
-
-        {/* User profile */}
-        <div className="flex items-center gap-3">
-          <div className="text-right">
-            <p className="text-sm font-medium text-gray-900">{user.name}</p>
-            <p className="text-xs text-gray-500">{user.email}</p>
-          </div>
-          <Avatar>
-            <AvatarFallback className="bg-indigo-600 text-white">
-              {initials}
-            </AvatarFallback>
-          </Avatar>
+        <div className="flex flex-col items-end">
+          <span className="text-sm font-bold text-gray-900">
+            {user.name ?? "User"}
+          </span>
+          <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
+            {user.role}
+          </span>
         </div>
+
+        <div className="h-10 w-10 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold ring-2 ring-indigo-50 shadow-sm">
+          {initials}
+        </div>
+
+        <div className="h-6 w-[1px] bg-gray-200 mx-2" />
+
+        <button
+          onClick={logout}
+          className="text-sm text-red-600 font-semibold hover:text-red-700 transition-colors"
+        >
+          Đăng xuất
+        </button>
       </div>
     </header>
   );

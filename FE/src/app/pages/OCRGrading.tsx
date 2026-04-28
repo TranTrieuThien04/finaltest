@@ -1,55 +1,60 @@
-import { useState } from "react";
-import { Button } from "../components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import React, { useState } from "react";
+import { uploadFile } from "../../api/apiClient";
 import { toast } from "sonner";
+import { UploadCloud, Loader2, CheckCircle2, XCircle } from "lucide-react";
 
 export default function OCRGrading() {
-  const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
-  const [res, setRes] = useState<any>(null);
+  const [results, setResults] = useState<any[]>([]);
 
-  const handleAction = async (path: string) => {
-    if (!file) return toast.error("Vui lòng chọn ảnh!");
-    setLoading(true);
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files?.length) return;
     const formData = new FormData();
-    formData.append("file", file);
-    formData.append("examCode", "1032");
+    Array.from(e.target.files).forEach(file => formData.append("files", file));
 
+    setLoading(true);
     try {
-      const response = await fetch(`http://localhost:8081/api/v1/ocr${path}`, {
-        method: "POST",
-        body: formData,
-      });
-      const data = await response.json();
-      if (response.ok) {
-        path === "/upload" ? setRes(data) : toast.success("Đã quét đáp án mẫu!");
-      } else { toast.error(data.message || "Lỗi xử lý"); }
-    } catch (e) { toast.error("Lỗi kết nối Backend 8081"); }
-    finally { setLoading(false); }
+      const res = await uploadFile("/api/v1/ocr/upload", formData);
+      const dataArray = Array.isArray(res.data) ? res.data : [];
+      setResults(dataArray);
+      const successCount = dataArray.filter(r => r.status === "success").length;
+      toast.success(`Đã chấm xong ${successCount}/${dataArray.length} bài!`);
+    } catch {
+      toast.error("Lỗi khi tải file lên");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div className="p-10 space-y-6 max-w-4xl mx-auto">
-      <h1 className="text-3xl font-bold text-blue-900">PlanbookAI - Chấm điểm tự động</h1>
-      <Card>
-        <CardHeader><CardTitle>Bảng điều khiển OCR</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
-          <input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} className="border p-2 w-full rounded" />
-          <div className="flex gap-4">
-            <Button onClick={() => handleAction("/scan-answer-key")} variant="outline" disabled={loading}>
-              1. Quét đáp án mẫu
-            </Button>
-            <Button onClick={() => handleAction("/upload")} disabled={loading} className="bg-blue-600">
-              2. Bắt đầu chấm bài học sinh
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-      {res && (
-        <Card className="p-6 bg-blue-50 border-blue-200 animate-in fade-in">
-          <h2 className="text-xl font-bold">Học sinh: {res.studentName}</h2>
-          <p className="text-4xl font-black text-blue-700">Điểm: {res.score}</p>
-        </Card>
+    <div className="p-6 space-y-6">
+      <h1 className="text-2xl font-bold">Chấm điểm tự động (OCR)</h1>
+      <div className="bg-white p-8 rounded-2xl border-2 border-dashed flex flex-col items-center">
+        <UploadCloud size={48} className="text-indigo-500 mb-4" />
+        <label className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold cursor-pointer hover:bg-indigo-700">
+          Chọn File Ảnh
+          <input type="file" multiple accept="image/*" className="hidden" onChange={handleUpload} disabled={loading} />
+        </label>
+        {loading && <Loader2 className="mt-4 animate-spin text-indigo-600" />}
+      </div>
+      
+      {results.length > 0 && (
+        <div className="bg-white border rounded-2xl overflow-hidden">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-gray-50 border-b">
+              <tr><th className="p-4">Tên file</th><th className="p-4">Nội dung / Lỗi</th><th className="p-4">Trạng thái</th></tr>
+            </thead>
+            <tbody className="divide-y">
+              {results.map((r, i) => (
+                <tr key={i}>
+                  <td className="p-4 font-bold">{r.file}</td>
+                  <td className="p-4 text-gray-600">{r.text || r.error}</td>
+                  <td className="p-4">{r.status === "success" ? <CheckCircle2 className="text-green-500"/> : <XCircle className="text-red-500"/>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

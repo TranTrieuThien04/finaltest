@@ -3,9 +3,9 @@ package com.planbookai.service.impl;
 import com.planbookai.dto.ocr.OcrResultResponse;
 import com.planbookai.dto.ocr.OcrSimulateRequest;
 import com.planbookai.entity.Exam;
-import com.planbookai.entity.OCRResult;
+import com.planbookai.entity.OcrResult;
 import com.planbookai.repository.ExamRepository;
-import com.planbookai.repository.OCRResultRepository;
+import com.planbookai.repository.OcrResultRepository;
 import com.planbookai.security.CurrentUserService;
 import com.planbookai.service.OcrService;
 import lombok.RequiredArgsConstructor;
@@ -22,7 +22,7 @@ import java.util.concurrent.ThreadLocalRandom;
 @RequiredArgsConstructor
 public class OcrServiceImpl implements OcrService {
 
-    private final OCRResultRepository ocrResultRepository;
+    private final OcrResultRepository ocrResultRepository;
     private final ExamRepository examRepository;
     private final CurrentUserService currentUserService;
 
@@ -30,49 +30,50 @@ public class OcrServiceImpl implements OcrService {
     @Transactional
     public OcrResultResponse simulateAndSave(OcrSimulateRequest request) {
         Long examId = Objects.requireNonNull(request.getExamId(), "examId is required");
-        Exam exam = getExam(examId);
+        Exam exam = getExamOrThrow(examId);
         ensureExamOwnerOrAdmin(exam);
 
         double score = Math.round(ThreadLocalRandom.current().nextDouble(5.0, 10.0) * 10.0) / 10.0;
-        String resultJson = "{\"status\":\"simulated\",\"confidence\":0.95,\"note\":\"OCR is mocked\"}";
 
-        OCRResult entity = new OCRResult();
-        entity.setExam(exam);
-        entity.setStudentName(request.getStudentName());
-        entity.setScore(score);
-        entity.setResultJson(resultJson);
-        entity.setGradedAt(LocalDateTime.now());
+        OcrResult entity = OcrResult.builder()
+                .examId(examId)
+                .studentName(request.getStudentName())
+                .score(score)
+                .resultJson("{\"status\":\"simulated\",\"note\":\"OCR is mocked for demo\"}")
+                .requiresReview(false)
+                .gradedAt(LocalDateTime.now())
+                .build();
+
         return toResponse(ocrResultRepository.save(entity));
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<OcrResultResponse> findByExam(@NonNull Long examId) {
-        Exam exam = getExam(examId);
+        Exam exam = getExamOrThrow(examId);
         ensureExamOwnerOrAdmin(exam);
-        return ocrResultRepository.findByExam_ExamId(examId).stream().map(this::toResponse).toList();
+        return ocrResultRepository.findByExamId(examId)
+                .stream()
+                .map(this::toResponse)
+                .toList();
     }
 
-    private @NonNull Exam getExam(@NonNull Long examId) {
-        return Objects.requireNonNull(
-                examRepository.findById(examId)
-                        .orElseThrow(() -> new IllegalArgumentException("Exam not found: " + examId))
-        );
+    private Exam getExamOrThrow(Long examId) {
+        return examRepository.findById(examId)
+                .orElseThrow(() -> new IllegalArgumentException("Exam not found: " + examId));
     }
 
-    private void ensureExamOwnerOrAdmin(@NonNull Exam exam) {
-        if (currentUserService.hasRole("ADMIN")) {
-            return;
-        }
+    private void ensureExamOwnerOrAdmin(Exam exam) {
+        if (currentUserService.hasRole("ADMIN")) return;
         if (!currentUserService.requireUserId().equals(exam.getTeacher().getUserId())) {
-            throw new IllegalArgumentException("You can only access OCR results for your own exam");
+            throw new IllegalArgumentException("Bạn chỉ có thể xem kết quả OCR của đề thi của mình");
         }
     }
 
-    private OcrResultResponse toResponse(OCRResult entity) {
+    private OcrResultResponse toResponse(OcrResult entity) {
         return OcrResultResponse.builder()
                 .ocrResultId(entity.getOcrResultId())
-                .examId(entity.getExam().getExamId())
+                .examId(entity.getExamId())
                 .studentName(entity.getStudentName())
                 .score(entity.getScore())
                 .resultJson(entity.getResultJson())

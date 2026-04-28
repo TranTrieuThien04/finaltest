@@ -3,7 +3,8 @@ package com.planbookai.service;
 import com.planbookai.dto.question.QuestionCreateRequest;
 import com.planbookai.dto.question.QuestionResponse;
 import com.planbookai.dto.question.QuestionUpdateRequest;
-import org.springframework.lang.NonNull;
+import com.planbookai.entity.enums.QuestionDifficulty;
+import com.planbookai.entity.enums.QuestionStatus;
 
 import java.util.List;
 import java.util.Optional;
@@ -12,13 +13,24 @@ public interface QuestionService {
 
     List<QuestionResponse> findAll();
 
-    Optional<QuestionResponse> findById(@NonNull Long questionId);
+    Optional<QuestionResponse> findById(Long questionId);
 
     QuestionResponse create(QuestionCreateRequest request);
 
-    QuestionResponse update(@NonNull Long questionId, QuestionUpdateRequest request);
+    QuestionResponse update(Long questionId, QuestionUpdateRequest request);
 
-    void delete(@NonNull Long questionId);
+    void delete(Long questionId);
 
-    List<QuestionResponse> filter(Long topicId, Long subjectId);
+    /**
+     * Filter câu hỏi theo topicId, subjectId, status, difficulty
+     * Bất kỳ tham số nào null thì bỏ qua điều kiện đó
+     */
+    List<QuestionResponse> filter(Long topicId, Long subjectId,
+                                   QuestionStatus status, QuestionDifficulty difficulty);
+
+    /** Duyệt câu hỏi (PENDING → APPROVED) */
+    QuestionResponse approve(Long questionId);
+
+    /** Từ chối câu hỏi */
+    QuestionResponse reject(Long questionId);
 }
