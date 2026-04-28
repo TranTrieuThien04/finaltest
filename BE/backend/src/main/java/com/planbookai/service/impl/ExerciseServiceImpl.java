@@ -30,37 +30,47 @@ public class ExerciseServiceImpl implements ExerciseService {
     private final CurrentUserService currentUserService;
 
     @Override
-    @Transactional
-    public ExerciseResponse create(ExerciseCreateRequest request) {
-        Long currentUserId = currentUserService.requireUserId();
-        User teacher = userRepository.findById(currentUserId)
-                .orElseThrow(() -> new IllegalArgumentException("User not found: " + currentUserId));
+@Transactional
+public ExerciseResponse create(ExerciseCreateRequest request) {
+    Long currentUserId = currentUserService.requireUserId();
+    User teacher = userRepository.findById(currentUserId)
+            .orElseThrow(() -> new IllegalArgumentException("User not found: " + currentUserId));
 
-        List<Question> source = request.getTopicId() == null
-                ? questionRepository.findAll()
-                : questionRepository.findByTopic_TopicId(request.getTopicId());
-        if (source.size() < request.getQuestionCount()) {
-            throw new IllegalArgumentException("Not enough questions to generate exercise");
-        }
-        Collections.shuffle(source);
-        List<Question> selected = source.stream().limit(request.getQuestionCount()).toList();
-
-        Exercise exercise = new Exercise();
-        exercise.setTeacher(teacher);
-        exercise.setTitle(request.getTitle());
-        exercise.setCreatedAt(LocalDateTime.now());
-        Exercise saved = exerciseRepository.save(exercise);
-
-        for (Question question : selected) {
-            ExerciseQuestion link = new ExerciseQuestion();
-            link.setId(new ExerciseQuestionId(saved.getExerciseId(), question.getQuestionId()));
-            link.setExercise(saved);
-            link.setQuestion(question);
-            exerciseQuestionRepository.save(link);
-        }
-        return toResponse(saved);
+    // FIX: Chỉ lấy câu hỏi đã được APPROVED — như ExamServiceImpl
+    List<Question> source;
+    if (request.getTopicId() != null) {
+        source = questionRepository.findByTopic_TopicIdAndStatus(
+                request.getTopicId(), QuestionStatus.APPROVED);
+    } else {
+        source = questionRepository.findByStatus(QuestionStatus.APPROVED);
     }
 
+    if (source.size() < request.getQuestionCount()) {
+        throw new IllegalArgumentException(
+            "Ngân hàng câu hỏi chỉ có " + source.size() + " câu được duyệt" +
+            (request.getTopicId() != null ? " trong chủ đề này" : "") +
+            ". Bạn yêu cầu " + request.getQuestionCount() + " câu."
+        );
+    }
+
+    Collections.shuffle(source);
+    List<Question> selected = source.stream().limit(request.getQuestionCount()).toList();
+
+    Exercise exercise = new Exercise();
+    exercise.setTeacher(teacher);
+    exercise.setTitle(request.getTitle());
+    exercise.setCreatedAt(LocalDateTime.now());
+    Exercise saved = exerciseRepository.save(exercise);
+
+    for (Question question : selected) {
+        ExerciseQuestion link = new ExerciseQuestion();
+        link.setId(new ExerciseQuestionId(saved.getExerciseId(), question.getQuestionId()));
+        link.setExercise(saved);
+        link.setQuestion(question);
+        exerciseQuestionRepository.save(link);
+    }
+    return toResponse(saved);
+}
     @Override
     @Transactional(readOnly = true)
     public List<ExerciseResponse> listMine() {

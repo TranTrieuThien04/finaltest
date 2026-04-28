@@ -23,20 +23,25 @@ export default function QuestionBank() {
   });
 
   const fetchData = async () => {
-    setLoading(true);
-    try {
-      const [qRes, tRes] = await Promise.all([
-        apiClient.get("/api/v1/questions"),
-        apiClient.get("/api/v1/topics")
-      ]);
-      setQuestions(qRes.data);
-      setTopics(tRes.data);
-    } catch {
-      toast.error("Lỗi tải dữ liệu ngân hàng");
-    } finally {
-      setLoading(false);
-    }
-  };
+  setLoading(true);
+  try {
+    const [qRes, tRes] = await Promise.all([
+      apiClient.get("/api/v1/questions?size=100"),  // FIX: page query
+      apiClient.get("/api/v1/topics")
+    ]);
+    // FIX: Backend trả Page object, phải lấy .content
+    const pageData = qRes.data;
+    setQuestions(
+      Array.isArray(pageData) ? pageData :          // fallback nếu là array
+      (pageData?.content ?? [])                      // đúng: lấy .content từ Page
+    );
+    setTopics(tRes.data ?? []);
+  } catch {
+    toast.error("Lỗi tải dữ liệu ngân hàng");
+  } finally {
+    setLoading(false);
+  }
+};
 
   useEffect(() => { fetchData(); }, []);
 

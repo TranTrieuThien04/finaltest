@@ -59,10 +59,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     SecurityContextHolder.getContext().setAuthentication(authentication);
                 }
             }
-        } catch (RuntimeException ignored) {
-            // Invalid token -> do not authenticate; continue request chain.
-        }
-
-        filterChain.doFilter(request, response);
+        } catch (RuntimeException e) {
+    // FIX: Log lại để debug, không nuốt im lặng
+    log.warn("JWT validation failed for request {}: {}", 
+             request.getServletPath(), e.getMessage());
+    // SecurityContext vẫn trống → request sẽ bị 401 bởi AuthenticationEntryPoint
+}
     }
 }
